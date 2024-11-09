@@ -38,6 +38,21 @@ class InsufficientFundsError(Exception):
         super().__init__(message)
 
 
+class InvalidCLIArgumentsError(Exception):
+    """
+    Custom exception raised when invalid command-line arguments are provided.
+    """
+
+    def __init__(self, message) -> None:
+        """
+        Initialize InvalidCLIArgumentsError with a custom message.
+
+        Parameters:
+            message (str): Error message to be displayed. Defaults to a generic message.
+        """
+        super().__init__(message)
+
+
 class Account:
 
     algod_address = "https://testnet-api.algonode.cloud"
@@ -345,6 +360,7 @@ def run_payment_simulation(
         if i == time_t:
             print(f"Day {i} of month {count_months} is contribution day.")
             for account in accounts:
+                print(account.address)
                 SingleSigTransaction(
                     sender=account, receiver=multisig_account, amount=0.5
                 ).pay(
@@ -393,9 +409,17 @@ def run_payment_simulation(
         i += 1
 
 
-if __name__ == "__main__":
-    # test_transactions()
-    # accounts = generate_account()
+def main():
+    parser = argparse.ArgumentParser(description="Run a Stokvel payment simulation.")
+    parser.add_argument(
+        "-t",
+        "--time",
+        type=int,
+        default=10,
+        help="Day of the month when contributions are made (default is 10)",
+    )
+    args = parser.parse_args()
+
     accounts = [
         {
             "address": "XIYVUEEH6BAUJPZDRMWIEINY32N7XWVSBABTD2NZALUKW6UR3BEBRZ4LPA",
@@ -429,6 +453,17 @@ if __name__ == "__main__":
     multisig_account = produce_multisig_stokvel_account(
         threshold=threshold, accounts=accounts, version=1
     )
+    if args.time >= 30 or args.time <= 0:
+        raise InvalidCLIArgumentsError("Day of the month must be between 1 and 29")
     run_payment_simulation(
-        time_t=10, accounts=accounts, multisig_account=multisig_account, amount=0.5
+        time_t=args.time,
+        accounts=accounts,
+        multisig_account=multisig_account,
+        amount=0.5,
     )
+
+
+if __name__ == "__main__":
+    # test_transactions()
+    # accounts = generate_account()
+    main()
