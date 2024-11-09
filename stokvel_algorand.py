@@ -369,7 +369,7 @@ def run_payment_simulation(
                 if signature_ammounts >= round(0.8 * len(accounts)):
                     MultiSigTransaction(
                         multisig_account=multisig_account,
-                        receiver=payout_account.address,
+                        receiver=payout_account,
                         multisig_participants=accounts,
                         amount=sum_ammount * 0.6,
                         threshold=round(0.8 * len(accounts)),
