@@ -20,6 +20,21 @@ class InvalidAddressError(Exception):
         super().__init__(message)
 
 
+class InsufficientFundsError(Exception):
+    """
+    Custom exception raised when insufficient funds are available for a transaction.
+    """
+
+    def __init__(self, message) -> None:
+        """
+        Initialize InsufficientFundsError with a custom message.
+
+        Parameters:
+            message (str): Error message to be displayed. Defaults to a generic message.
+        """
+        super().__init__(message)
+
+
 class Account:
 
     algod_address = "https://testnet-api.algonode.cloud"
@@ -46,6 +61,40 @@ class Account:
     def check_balance(self) -> int:
         account_info = self.account_info()
         return account_info["amount"] * self.algo_conversion
+
+
+class Transaction:
+    def __init__(self, sender: Account, receiver: Account, amount: int) -> None:
+        self.sender = sender
+        self.receiver = receiver
+        self.amount = amount
+
+    def pay(self, note: str):
+        if self.sender.check_balance() < self.amount:
+            raise InsufficientFundsError(
+                f"Insufficient funds for {self.sender.address}"
+            )
+
+        converted_ammount = int(self.amount / self.sender.algo_conversion)
+        unsigned_txn = transaction.PaymentTxn(
+            sender=self.sender.address,
+            sp=self.sender.algod_client.suggested_params(),
+            receiver=self.receiver,
+            amt=converted_ammount,  # Amount variable is measured in MicroAlgos. i.e. 1 ALGO = 1,000,000 MicroAlgos
+            note=encoding.encode(note),
+        )
+
+        signed_txn = unsigned_txn.sign(self.sender.private_key)
+
+        txid = self.sender.algod_client.send_transaction(signed_txn)
+
+        _ = transaction.wait_for_confirmation(self.sender.algod_client, txid)
+
+        print(f"Successfully submitted transaction with txID: {txid}")
+        print(f"Sender: {self.sender.address}")
+        print(f"Receiver: {self.receiver.address}")
+        print(f"Amount: {self.amount} Algoes")
+        print(f"Note: {note}")
 
 
 # Utility functions
