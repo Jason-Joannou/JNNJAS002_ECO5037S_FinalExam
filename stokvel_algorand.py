@@ -1,4 +1,6 @@
 import argparse
+import time
+import webbrowser
 from typing import Any, Dict, List, Optional, Tuple
 
 from algosdk import account, encoding, error, mnemonic, transaction
@@ -45,11 +47,11 @@ class Account:
         self,
         address: str,
         private_key: Optional[str] = None,
-        mnemonic: Optional[str] = None,
+        mnemonic_phrase: Optional[str] = None,
     ) -> None:
         self.address = address
         self.private_key = private_key
-        self.mnemonic = mnemonic
+        self.mnemonic_phrase = mnemonic_phrase
 
     def account_info(self) -> Dict[str, Any]:
         try:
@@ -61,6 +63,35 @@ class Account:
     def check_balance(self) -> int:
         account_info = self.account_info()
         return account_info["amount"] * self.algo_conversion
+
+    def fund_address(self) -> None:
+
+        if self.check_balance() <= 1:
+            print(
+                f"The address {self.address} has not been funded and will not be able to transact with other accounts."
+            )
+            print(
+                f"Please fund address {self.address} using the algorand test dispensor."
+            )
+            try:
+                webbrowser.open_new_tab("https://bank.testnet.algorand.network/")
+            except webbrowser.Error:
+                print(
+                    "Failed to open URL in browser. Please manually open the URL provided."
+                )
+                print("URL:", "https://bank.testnet.algorand.network/")
+
+            while self.check_balance() <= 1:
+                print(f"Waiting for address {self.address} to be funded...")
+                time.sleep(5)
+
+            print(
+                f"Address {self.address} has been funded and has {self.check_balance()} algoes!"
+            )
+        else:
+            print(
+                f"Address {self.address} has been funded and has {self.check_balance()} algoes!"
+            )
 
 
 class SingleSigTransaction:
@@ -85,9 +116,9 @@ class SingleSigTransaction:
         unsigned_txn = transaction.PaymentTxn(
             sender=self.sender.address,
             sp=self.sender.algod_client.suggested_params(),
-            receiver=self.receiver,
+            receiver=self.receiver.address,
             amt=converted_ammount,  # Amount variable is measured in MicroAlgos. i.e. 1 ALGO = 1,000,000 MicroAlgos
-            note=encoding.encode(note),
+            note=note.encode("utf-8"),
         )
 
         signed_txn = unsigned_txn.sign(self.sender.private_key)
@@ -138,9 +169,9 @@ class MultiSigTransaction:
             unsigned_msig_txn = transaction.PaymentTxn(
                 sender=self.sender.address,
                 sp=self.sender.algod_client.suggested_params(),
-                receiver=self.receiver,
+                receiver=self.receiver.address,
                 amt=converted_amount,
-                note=encoding.encode(note),
+                note=note.encode("utf-8"),
             )
 
             msig_txn = transaction.MultisigTransaction(unsigned_msig_txn, multi_sig_txn)
@@ -164,7 +195,7 @@ class MultiSigTransaction:
 #################################################################################################################
 
 
-def load_account(address: str, private_key: str, mnemonic: str) -> Account:
+def load_account(address: str, private_key: str, mnemonic_phrase: str) -> Account:
     """
     Load an account with the provided address, private key, passphrase, and save it to file if specified.
 
@@ -177,7 +208,9 @@ def load_account(address: str, private_key: str, mnemonic: str) -> Account:
     Returns:
         Account: An instance of the Account class representing the loaded account.
     """
-    return Account(address=address, private_key=private_key, mnemonic=mnemonic)
+    return Account(
+        address=address, private_key=private_key, mnemonic_phrase=mnemonic_phrase
+    )
 
 
 def generate_account(n_accounts: int = 5) -> List[Account]:
@@ -196,11 +229,15 @@ def generate_account(n_accounts: int = 5) -> List[Account]:
     for i in range(1, n_accounts + 1):
         # generate an accountp
         private_key, address = account.generate_account()
-        mnemonic = mnemonic.from_private_key(private_key)
+        mnemonic_phrase = mnemonic.from_private_key(private_key)
 
         user_account = load_account(
-            address=address, private_key=private_key, mnemonic=mnemonic
+            address=address, private_key=private_key, mnemonic_phrase=mnemonic_phrase
         )
+        print("Account Address:", user_account.address)
+        print("Account Mnemonic Phrase:", mnemonic_phrase)
+        print("Account Private Key:", private_key)
+        user_account.fund_address()
         accounts.append(user_account)
     return accounts
 
@@ -231,3 +268,61 @@ def produce_multisig_stokvel_account(
         print(f"Error: {e}")
     except Exception as e:
         print(f"Error: {e}")
+
+
+def test_transactions():
+
+    # accounts = generate_account()
+    accounts = [
+        {
+            "address": "XIYVUEEH6BAUJPZDRMWIEINY32N7XWVSBABTD2NZALUKW6UR3BEBRZ4LPA",
+            "mnemonic_phrase": "usage toy repeat muscle neck matter gloom minute quantum bracket will unfair alley target effort book oval rib portion boy margin west source abandon dirt",
+            "private_key": "fJ95bRnZSSVuTI16tUb20U6Dd9eIGe08rlCr8cPlAxq6MVoQh/BBRL8jiyyCIbjem/vasggDMem5AuirepHYSA==",
+        },
+        {
+            "address": "ZJLDM4WFX2RBZM5DCWD4FZ364H3MW6X2ELNZI3BVTXDB5FMO4QYYEF5LYY",
+            "mnemonic_phrase": "wood video relax shop palm repeat bomb lawsuit example exit health assume umbrella you near dice delay odor chalk drastic plastic now exchange about fetch",
+            "private_key": "6fc8amusz9omI35z+lPU3hD2/HNyPc9J5kskBNNc1mnKVjZyxb6iHLOjFYfC537h9st6+iLblGw1ncYelY7kMQ==",
+        },
+        {
+            "address": "THSRW54PN3QB5HWZOTEKHSTTITDI4FQXP5EHKOVCXCEKBPHDDP4CTKERDY",
+            "mnemonic_phrase": "bachelor boring congress beauty speed plastic brisk ranch uphold miss remember infant salute hungry impose enforce shadow drum chapter switch cloth regular lawn about frozen",
+            "private_key": "iXgGXjqBaJiKg7F2d2NrNWdfvT0uSibm0EzC7RXTwm+Z5Rt3j27gHp7ZdMijynNExo4WF39IdTqiuIigvOMb+A==",
+        },
+        {
+            "address": "2HZHZSFC7MUNLCXF2OAJRCJQGRXZEXGYV5FIBZOM277WYYP5JVZBE43WXQ",
+            "mnemonic_phrase": "major waste this fox tissue first adult indoor vacant wrong fluid vague install sure toss diagram summer demise fun fix fiscal auto pet absorb wink",
+            "private_key": "M+y9wcVl8V15AHODr3+zCr86aLf8PMmWDryAxSs+bNTR8nzIovso1Yrl04CYiTA0b5Jc2K9KgOXM1/9sYf1Ncg==",
+        },
+        {
+            "address": "UFM4KJQYQKBDHADZKPOW477IZMD7R5P2556EVDERUV4E6EQAE27C42T6WU",
+            "mnemonic_phrase": "tonight bird salon process chicken beach denial dragon legal risk arena track huge room syrup spoon lucky adapt wash install rent slight north abandon bean",
+            "private_key": "JKcFfbnak01MB0L7m+4WaF6375ab0iXEwO5XJ9suyxKhWcUmGIKCM4B5U91uf+jLB/j1+u98SoyRpXhPEgAmvg==",
+        },
+    ]
+    accounts = [Account(**account) for account in accounts]
+    threshold = round(0.8 * len(accounts))
+
+    multisig_account = produce_multisig_stokvel_account(
+        threshold=threshold, accounts=accounts, version=1
+    )
+
+    for account in accounts:
+        SingleSigTransaction(
+            sender=account,
+            receiver=multisig_account,
+            amount=0.5,
+            multi_sig_accoutns=accounts,
+        ).pay(note="Test")
+
+    MultiSigTransaction(
+        multisig_account=multisig_account,
+        receiver=accounts[0],
+        multisig_participants=accounts,
+        amount=0.5,
+        threshold=threshold,
+    ).pay(note="Test")
+
+
+if __name__ == "__main__":
+    test_transactions()
