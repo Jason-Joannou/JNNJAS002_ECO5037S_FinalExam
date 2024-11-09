@@ -340,7 +340,8 @@ def run_payment_simulation(
     i = 1
     sum_ammount = 0
     count_months = 1
-    while i < 31:
+    stop_simulation = False
+    while i < 31 and not stop_simulation:
         print(f"This is day {i} of month {count_months}.")
         if i == time_t:
             print(f"Day {i} of month {count_months} is contribution day.")
@@ -382,7 +383,8 @@ def run_payment_simulation(
         if len(successful_payments) == 5:
             for account in accounts:
                 if input("Do you want to continue? (y/n)") == "n":
-                    break
+                    stop_simulation = True  # Set the flag to True to stop both loops
+                    break  # Break out of the inner loop
         if i == 30:
             i = 0
             count_months += 1
