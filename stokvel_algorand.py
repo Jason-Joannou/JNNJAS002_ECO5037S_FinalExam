@@ -306,22 +306,28 @@ def test_transactions():
     multisig_account = produce_multisig_stokvel_account(
         threshold=threshold, accounts=accounts, version=1
     )
-
+    amount = 0.5
+    sum_ammount = 0
     for account in accounts:
         SingleSigTransaction(
             sender=account,
             receiver=multisig_account,
             amount=0.5,
             multi_sig_accoutns=accounts,
-        ).pay(note="Test")
+        ).pay(
+            note=f"Payment made from participant {account.address} to stokvel address {multisig_account.address}"
+        )
+        sum_ammount += amount
 
     MultiSigTransaction(
         multisig_account=multisig_account,
         receiver=accounts[0],
         multisig_participants=accounts,
-        amount=0.5,
+        amount=sum_ammount,
         threshold=threshold,
-    ).pay(note="Test")
+    ).pay(
+        note=f"Payment made from stokvel address {multisig_account.address} to participant {accounts[0].address}"
+    )
 
 
 if __name__ == "__main__":
