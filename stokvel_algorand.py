@@ -110,9 +110,8 @@ class SingleSigTransaction:
         try:
 
             if self.sender.check_balance() < self.amount:
-                raise InsufficientFundsError(
-                    f"Insufficient funds for {self.sender.address}"
-                )
+                print(f"Insufficient funds for {self.sender.address}")
+                self.sender.fund_address()
 
             converted_ammount = int(self.amount / self.sender.algo_conversion)
             unsigned_txn = transaction.PaymentTxn(
@@ -132,7 +131,7 @@ class SingleSigTransaction:
             print(f"Successfully submitted transaction with txID: {txid}")
             print(f"Sender: {self.sender.address}")
             print(f"Receiver: {self.receiver.address}")
-            print(f"Amount: {converted_ammount} Algoes")
+            print(f"Amount: {self.amount} Algoes")
             print(f"Note: {note}")
         except Exception as e:
             print(f"Error in SingleSig: {e}")
@@ -192,7 +191,7 @@ class MultiSigTransaction:
             print(f"Successfully submitted transaction with txID: {txid}")
             print(f"Sender: {self.sender.address}")
             print(f"Receiver: {self.receiver.address}")
-            print(f"Amount: {converted_amount} Algoes")
+            print(f"Amount: {self.amount} Algoes")
             print(f"Note: {note}")
 
         except Exception as e:
