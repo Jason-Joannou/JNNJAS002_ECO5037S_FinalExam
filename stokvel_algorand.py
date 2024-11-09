@@ -63,8 +63,14 @@ class Account:
         return account_info["amount"] * self.algo_conversion
 
 
-class Transaction:
-    def __init__(self, sender: Account, receiver: Account, amount: int) -> None:
+class SingleSigTransaction:
+    def __init__(
+        self,
+        sender: Account,
+        receiver: Account,
+        amount: int,
+        multi_sig_accoutns: List[Account],
+    ) -> None:
         self.sender = sender
         self.receiver = receiver
         self.amount = amount
@@ -95,6 +101,63 @@ class Transaction:
         print(f"Receiver: {self.receiver.address}")
         print(f"Amount: {self.amount} Algoes")
         print(f"Note: {note}")
+
+
+class MultiSigTransaction:
+
+    def __init__(
+        self,
+        multisig_account: Account,
+        receiver: Account,
+        multisig_participants: List[Account],
+        amount: int,
+        threshold: int,
+    ) -> None:
+        self.sender = multisig_account
+        self.receiver = receiver
+        self.participants = multisig_participants
+        self.amount = amount
+        self.threshold = threshold
+        self.version = 1
+
+    def pay(self, note: str):
+
+        try:
+            converted_amount = int(self.amount / Account.algo_conversion)
+            multi_sig_addresses = [
+                participant.address for participant in self.participants
+            ]
+
+            multi_sig_txn = transaction.Multisig(
+                version=self.version,
+                threshold=self.threshold,
+                addresses=multi_sig_addresses,
+            )
+            multi_sig_txn.validate()
+
+            unsigned_msig_txn = transaction.PaymentTxn(
+                sender=self.sender.address,
+                sp=self.sender.algod_client.suggested_params(),
+                receiver=self.receiver,
+                amt=converted_amount,
+                note=encoding.encode(note),
+            )
+
+            msig_txn = transaction.MultisigTransaction(unsigned_msig_txn, multi_sig_txn)
+
+            for i in range(self.threshold):
+                msig_txn.sign(self.participants[i].private_key)
+            txid = self.sender.algod_client.send_transaction(msig_txn)
+            _ = transaction.wait_for_confirmation(self.sender.algod_client, txid)
+
+            print(f"Successfully submitted transaction with txID: {txid}")
+            print(f"Sender: {self.sender.address}")
+            print(f"Receiver: {self.receiver.address}")
+            print(f"Amount: {self.amount} Algoes")
+            print(f"Note: {note}")
+
+        except Exception as e:
+            print(f"Error: {e}")
 
 
 # Utility functions
