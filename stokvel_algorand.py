@@ -471,7 +471,6 @@ def run_payment_simulation(
         if i == time_t:
             print(f"Day {i} of month {count_months} is contribution day.")
             for account in accounts:
-                print(account.address)
                 SingleSigTransaction(
                     sender=account, receiver=multisig_account, amount=0.5
                 ).pay(
