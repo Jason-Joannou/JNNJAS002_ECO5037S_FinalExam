@@ -159,6 +159,49 @@ class LiquidityPool:
         print(f"{trader.address} traded {amount_algo} ALGO for {amount_uctzar} UCTZAR.")
         print(f"Trade fee of {trade_fee} ALGO added to the pool.")
 
+    def trade_uctzar_algo(self, trader: Account, amount_uctzar: float):
+
+        # Trade fee calculation
+        trade_fee = amount_uctzar * 0.003  # 0.3% fee
+        net_amount_uctzar = amount_uctzar - trade_fee
+        amount_algo = net_amount_uctzar / 2
+
+        net_converted_amount = int(net_amount_uctzar * 1e2)
+
+        txn_1 = AssetTransferTxn(
+            sender=trader.address,
+            receiver=self.pool_account.address,
+            amt=net_converted_amount,  # Convert UCTZAR to its smallest unit (2 decimals)
+            index=self.asset_id,
+            sp=self.pool_account.algod_client.suggested_params(),
+        )
+
+        txn_2 = PaymentTxn(
+            sender=self.pool_account.address,
+            receiver=trader.address,
+            amt=int(amount_algo),  # Convert microAlgos to ALGO
+            sp=self.pool_account.algod_client.suggested_params(),
+        )
+
+        signed_txns = process_atomic_transactions(
+            transactions=[txn_1, txn_2], account=trader
+        )
+
+        txid = self.pool_account.algod_client.send_transactions(signed_txns)
+        _ = transaction.wait_for_confirmation(self.pool_account.algod_client, txid)
+
+        # Update pool balances and LP tokens
+        self.pool_ALGO -= amount_algo
+        self.pool_UCTZAR += net_amount_uctzar
+        lp_token_amount = net_amount_uctzar + amount_algo
+        self.total_lp_tokens += lp_token_amount
+        self.lp_tokens[trader.address] = (
+            self.lp_tokens.get(trader.address, 0) + lp_token_amount
+        )
+        print(f"LP Tokens for {trader.address}: {self.lp_tokens[trader.address]}")
+        print(f"{trader.address} traded {amount_uctzar} UCTZAR for {amount_algo} ALGO.")
+        print(f"Trade fee of {trade_fee} UCTZAR added to the pool.")
+
 
 # Utility Functions
 ###############################################################################################################################
