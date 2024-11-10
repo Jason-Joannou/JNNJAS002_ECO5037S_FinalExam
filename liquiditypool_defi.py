@@ -1,9 +1,8 @@
-import random
 import time
 import webbrowser
 from typing import Any, Dict, List, Optional
 
-from algosdk import account, mnemonic, transaction
+from algosdk import transaction
 from algosdk.transaction import (
     AssetOptInTxn,
     AssetTransferTxn,
@@ -25,11 +24,27 @@ class Account:
         private_key: Optional[str] = None,
         mnemonic_phrase: Optional[str] = None,
     ) -> None:
+        """
+        Initialize an Account instance with the specified address, private key, and mnemonic phrase.
+
+        Parameters:
+            address (str): The address of the account.
+            private_key (Optional[str]): The private key associated with the account, default is None.
+            mnemonic_phrase (Optional[str]): The mnemonic phrase for the account, default is None.
+        """
         self.address = address
         self.private_key = private_key
         self.mnemonic_phrase = mnemonic_phrase
 
     def account_info(self) -> Dict[str, Any]:
+        """
+        Retrieve account information from the Algorand blockchain.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing information about the account,
+            such as balance and status. If an error occurs during retrieval, an empty
+            dictionary is returned and an error message is printed.
+        """
         try:
             return self.algod_client.account_info(self.address)
         except Exception as e:
@@ -37,11 +52,25 @@ class Account:
             return {}
 
     def check_balance(self) -> int:
+        """
+        Retrieve the balance of the account in ALGOs.
+
+        Returns:
+            int: The balance of the account in ALGOs.
+        """
         account_info = self.account_info()
         return account_info["amount"] * self.algo_conversion
 
     def fund_address(self) -> None:
+        """
+        Ensures that the account is funded with sufficient ALGOs to transact on the Algorand blockchain.
 
+        This method checks the balance of the account. If the balance is less than or equal to 1 ALGO,
+        it prompts the user to fund the account using the Algorand test dispenser and opens the dispenser
+        URL in a web browser. It then repeatedly checks the balance until the account is funded.
+
+        If the balance is sufficient, it confirms that the account is funded and prints the current balance.
+        """
         if self.check_balance() <= 1:
             print(
                 f"The address {self.address} has not been funded and will not be able to transact with other accounts."
@@ -73,6 +102,13 @@ class Account:
 class LiquidityPool:
 
     def __init__(self, pool_account: Account, asset_id: str):
+        """
+        Initialize a LiquidityPool instance with the specified pool account and asset ID.
+
+        Parameters:
+            pool_account (Account): The account that will manage the liquidity pool.
+            asset_id (str): The ID of the asset that will be used in the liquidity pool.
+        """
         self.pool_ALGO = 0
         self.pool_UCTZAR = 0
         self.total_lp_tokens = 0
@@ -83,6 +119,19 @@ class LiquidityPool:
     def add_liquidity(
         self, provider: Account, amount_algo: float, amount_uctzar: float
     ):
+        """
+        Adds liquidity to the pool from the provider account.
+
+        This function facilitates the addition of ALGO and UCTZAR assets from a provider
+        to the liquidity pool. It ensures that the provider has sufficient balance for the
+        transaction, creates the necessary transactions to transfer assets to the pool,
+        updates the pool's balance and the provider's LP token balance.
+
+        Parameters:
+        provider (Account): The account providing liquidity to the pool.
+        amount_algo (float): The amount of ALGO to be added to the pool.
+        amount_uctzar (float): The amount of UCTZAR to be added to the pool.
+        """
         if provider.check_balance() < (
             amount_algo + 0.001
         ):  # Ensure balance for transaction fee
@@ -125,7 +174,18 @@ class LiquidityPool:
         print(f"LP Tokens for {provider.address}: {self.lp_tokens[provider.address]}")
 
     def trade_algo_uctzar(self, trader: Account, amount_algo: float):
+        """
+        Trades ALGO for UCTZAR from the pool.
 
+        This function facilitates a trade of ALGO for UCTZAR from the pool to a trader account.
+        It calculates the net amount of ALGO to be transferred (after accounting for the trade fee),
+        creates the necessary transactions to transfer ALGO and UCTZAR assets, and updates the
+        pool's balance and the trader's LP token balance.
+
+        Parameters:
+        trader (Account): The account trading with the pool.
+        amount_algo (float): The amount of ALGO to be traded for UCTZAR.
+        """
         # Trade fee calculation
         trade_fee = amount_algo * 0.003  # 0.3% fee
         net_amount_algo = amount_algo - trade_fee
@@ -170,7 +230,26 @@ class LiquidityPool:
         print(f"Trade fee of {trade_fee} ALGO added to the pool.")
 
     def trade_uctzar_algo(self, trader: Account, amount_uctzar: float):
+        """
+        Executes a trade of UCTZAR for ALGO in the liquidity pool.
 
+        This function calculates the trade fee and net amount of UCTZAR to be traded.
+        It converts the net UCTZAR amount to its smallest unit and creates an atomic
+        transaction with two operations: transferring UCTZAR to the pool and ALGO
+        to the trader. The transactions are signed and sent for confirmation.
+
+        Parameters:
+            trader (Account): The account performing the trade.
+            amount_uctzar (float): The amount of UCTZAR the trader wishes to trade.
+
+        Returns:
+            None
+
+        Side Effects:
+            Updates the pool's ALGO and UCTZAR balances.
+            Adjusts the total liquidity pool tokens and the trader's token balance.
+            Prints transaction details, including trade amounts and fees.
+        """
         # Trade fee calculation
         trade_fee = amount_uctzar * 0.003  # 0.3% fee
         net_amount_uctzar = amount_uctzar - trade_fee
@@ -213,6 +292,24 @@ class LiquidityPool:
         print(f"Trade fee of {trade_fee} UCTZAR added to the pool.")
 
     def remove_liquidity(self, provider: Account):
+        """
+        Removes liquidity from the pool for a given provider.
+
+        This function facilitates the withdrawal of liquidity by a liquidity provider.
+        The provider's share of the pool's ALGO and UCTZAR is calculated based on their
+        LP tokens. The equivalent ALGO and UCTZAR amounts are transferred back to the
+        provider's account. The pool's balance and total LP tokens are updated accordingly.
+
+        Parameters:
+        provider (Account): The account of the liquidity provider removing liquidity.
+
+        Side Effects:
+        - Transfers the provider's calculated share of ALGO and UCTZAR from the pool to
+        the provider's account.
+        - Updates the pool's ALGO and UCTZAR balances.
+        - Adjusts the total liquidity pool tokens and removes the provider's token record.
+        - Prints the amount of ALGO and UCTZAR withdrawn by the provider.
+        """
         tokens = self.lp_tokens[provider.address]
         if tokens == 0:
             print("No LP tokens to remove.")
@@ -260,6 +357,17 @@ class LiquidityPool:
 def process_atomic_transactions(
     transactions: List[AssetTransferTxn], accounts: List[Account]
 ) -> List[SignedTransaction]:
+    """
+    Process a list of atomic transactions by assigning a group ID and signing each
+    transaction with the corresponding account's private key.
+
+    Parameters:
+        transactions (List[AssetTransferTxn]): A list of transactions to process.
+        accounts (List[Account]): A list of accounts to sign the transactions with.
+
+    Returns:
+        List[SignedTransaction]: A list of signed transactions.
+    """
     signed_txns = []
     gid = transaction.calculate_group_id(transactions)
     for txn, account in zip(transactions, accounts):
@@ -270,9 +378,20 @@ def process_atomic_transactions(
     return signed_txns
 
 
-# Create UCTZAR Asset
 def create_uctzar_asset(manager_address: Account):
-    # Parameters for ASA creation - fixed for this example
+    """
+    Create a new Algorand Standard Asset (ASA) for the UCTZAR stablecoin.
+
+    Parameters:
+        manager_address (Account): The account that will manage the ASA.
+
+    Returns:
+        int: The asset ID of the newly created ASA.
+
+    Raises:
+        Exception: If the asset creation transaction fails or the asset ID cannot be found.
+    """
+
     params = manager_address.algod_client.suggested_params()
     txn = transaction.AssetConfigTxn(
         sender=manager_address.address,
@@ -291,10 +410,8 @@ def create_uctzar_asset(manager_address: Account):
     txid = manager_address.algod_client.send_transaction(signed_txn)
     print("Creating UCTZAR asset, TXID:", txid)
 
-    # Wait for transaction confirmation
     transaction.wait_for_confirmation(manager_address.algod_client, txid)
 
-    # Fetch the asset ID from the account information
     account_info = manager_address.algod_client.account_info(manager_address.address)
     asset_id = None
     for asset in account_info.get("created-assets", []):
@@ -310,6 +427,18 @@ def create_uctzar_asset(manager_address: Account):
 
 
 def opt_in_asset(trader: Account, asset_id: str):
+    """
+    Opt-in the user to the specified asset.
+
+    Parameters:
+        trader (Account): The account of the user opting in.
+        asset_id (str): The asset ID to opt into.
+
+    Side Effects:
+    - Sends an opt-in transaction to the Algorand blockchain, allowing the user to
+    hold the specified asset.
+    - Prints the transaction ID of the opt-in transaction.
+    """
     params = trader.algod_client.suggested_params()
     opt_in_txn = AssetOptInTxn(sender=trader.address, sp=params, index=asset_id)
     signed_opt_in_txn = opt_in_txn.sign(trader.private_key)
@@ -399,6 +528,18 @@ def distribute_initial_uctzar(
 def distribute_uctzar_to_participants(
     manager: Account, participants: List[Account], asset_id: str, amount: int
 ):
+    """
+    Distribute UCTZAR to all participants in the liquidity pool.
+
+    Parameters:
+    - manager: Account that created the UCTZAR asset.
+    - participants: List of Accounts of participants in the liquidity pool.
+    - asset_id: The UCTZAR asset ID.
+    - amount: The amount of UCTZAR to transfer (in the smallest unit, e.g., 1 = 0.01 UCTZAR).
+
+    Returns:
+    - None
+    """
     params = manager.algod_client.suggested_params()
     for participant in participants:
         txn = AssetTransferTxn(
@@ -418,7 +559,15 @@ def distribute_uctzar_to_participants(
 
 # Main Simulation Function
 def run_simulation():
+    """
+    Run a simulation of the liquidity pool protocol.
 
+    This function simulates the creation of a liquidity pool, distribution of UCTZAR to participants, addition of liquidity by providers, trading between traders and the pool, removal of liquidity by providers, and opt-out of participants.
+
+    It uses example hard-coded values for the simulation, such as the number of participants, amount of UCTZAR distributed, and amount of liquidity added/removed.
+
+    :return: None
+    """
     accounts = [
         {
             "address": "N6F3F2ZDMKVGLHBQJZPCDFKEBTJXKL72IFRPEKC3PF3C3XMHOA7OHSPCGE",
