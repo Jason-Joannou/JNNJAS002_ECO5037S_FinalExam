@@ -179,7 +179,7 @@ class LiquidityPool:
         txn_2 = PaymentTxn(
             sender=self.pool_account.address,
             receiver=trader.address,
-            amt=int(amount_algo),  # Convert microAlgos to ALGO
+            amt=int(amount_algo / Account.algo_conversion),  # Convert Algo to MicroAlgo
             sp=self.pool_account.algod_client.suggested_params(),
         )
 
@@ -201,6 +201,48 @@ class LiquidityPool:
         print(f"LP Tokens for {trader.address}: {self.lp_tokens[trader.address]}")
         print(f"{trader.address} traded {amount_uctzar} UCTZAR for {amount_algo} ALGO.")
         print(f"Trade fee of {trade_fee} UCTZAR added to the pool.")
+
+    def remove_liquidity(self, provider: Account):
+        tokens = self.lp_tokens[provider.address]
+        if tokens == 0:
+            print("No LP tokens to remove.")
+            return
+
+        provider_share = tokens / self.total_lp_tokens
+        algo_share = provider_share * self.pool_ALGO
+        uctzar_share = provider_share * self.pool_UCTZAR
+
+        txn_1 = PaymentTxn(
+            sender=self.pool_account.address,
+            receiver=provider.address,
+            amt=int(algo_share * 1e6),  # Convert ALGO to microAlgos
+            sp=self.pool_account.algod_client.suggested_params(),
+        )
+
+        txn_2 = AssetTransferTxn(
+            sender=self.pool_account.address,
+            receiver=provider.address,
+            amt=int(uctzar_share * 1e2),  # Convert UCTZAR to smallest unit (2 decimals)
+            index=self.asset_id,
+            sp=self.pool_account.algod_client.suggested_params(),
+        )
+
+        signed_txns = process_atomic_transactions(
+            transactions=[txn_1, txn_2], account=provider
+        )
+
+        txid = self.pool_account.algod_client.send_transactions(signed_txns)
+        _ = transaction.wait_for_confirmation(self.pool_account.algod_client, txid)
+
+        # Update pool balances and LP tokens
+        self.pool_ALGO -= algo_share
+        self.pool_UCTZAR -= uctzar_share
+        self.total_lp_tokens -= tokens
+        del self.lp_tokens[provider.address]
+
+        print(
+            f"{provider.address} withdrew {algo_share} ALGO and {uctzar_share} UCTZAR."
+        )
 
 
 # Utility Functions
