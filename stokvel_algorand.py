@@ -2,9 +2,9 @@ import argparse
 import random
 import time
 import webbrowser
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-from algosdk import account, encoding, error, mnemonic, transaction
+from algosdk import account, error, mnemonic, transaction
 from algosdk.v2client import algod
 
 
@@ -65,11 +65,27 @@ class Account:
         private_key: Optional[str] = None,
         mnemonic_phrase: Optional[str] = None,
     ) -> None:
+        """
+        Initialize an Account instance with the specified address, private key, and mnemonic phrase.
+
+        Parameters:
+            address (str): The address of the account.
+            private_key (Optional[str]): The private key associated with the account, default is None.
+            mnemonic_phrase (Optional[str]): The mnemonic phrase for the account, default is None.
+        """
         self.address = address
         self.private_key = private_key
         self.mnemonic_phrase = mnemonic_phrase
 
     def account_info(self) -> Dict[str, Any]:
+        """
+        Retrieve account information from the Algorand blockchain.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing information about the account,
+            such as balance and status. If an error occurs during retrieval, an empty
+            dictionary is returned and an error message is printed.
+        """
         try:
             return self.algod_client.account_info(self.address)
         except Exception as e:
@@ -77,11 +93,25 @@ class Account:
             return {}
 
     def check_balance(self) -> int:
+        """
+        Retrieve the balance of the account in ALGOs.
+
+        Returns:
+            int: The balance of the account in ALGOs.
+        """
         account_info = self.account_info()
         return account_info["amount"] * self.algo_conversion
 
     def fund_address(self) -> None:
+        """
+        Ensures that the account is funded with sufficient ALGOs to transact on the Algorand blockchain.
 
+        This method checks the balance of the account. If the balance is less than or equal to 1 ALGO,
+        it prompts the user to fund the account using the Algorand test dispenser and opens the dispenser
+        URL in a web browser. It then repeatedly checks the balance until the account is funded.
+
+        If the balance is sufficient, it confirms that the account is funded and prints the current balance.
+        """
         if self.check_balance() <= 1:
             print(
                 f"The address {self.address} has not been funded and will not be able to transact with other accounts."
@@ -117,11 +147,34 @@ class SingleSigTransaction:
         receiver: Account,
         amount: int,
     ) -> None:
+        """
+        Initialize a SingleSigTransaction with the specified sender, receiver, and amount.
+
+        Parameters:
+            sender (Account): The account that will send the transaction.
+            receiver (Account): The account that will receive the transaction.
+            amount (int): The amount to be transferred in ALGOs.
+        """
+
         self.sender = sender
         self.receiver = receiver
         self.amount = amount
 
     def pay(self, note: str):
+        """
+        Executes a single signature payment transaction on the Algorand blockchain.
+
+        This method checks if the sender has sufficient funds to cover the transaction amount
+        and funds the account if necessary. It then creates, signs, and sends a payment transaction
+        from the sender to the receiver. The transaction is confirmed on-chain, and relevant
+        transaction details are printed.
+
+        Parameters:
+            note (str): A note to include with the transaction, encoded in UTF-8.
+
+        Raises:
+            Exception: If an error occurs during the transaction process.
+        """
         try:
 
             if self.sender.check_balance() < self.amount:
@@ -162,6 +215,16 @@ class MultiSigTransaction:
         amount: int,
         threshold: int,
     ) -> None:
+        """
+        Initialize a MultiSigTransaction with the specified sender, receiver, participants, amount and threshold.
+
+        Parameters:
+            multisig_account (Account): The account that will send the transaction.
+            receiver (Account): The account that will receive the transaction.
+            multisig_participants (List[Account]): The participants that will sign the transaction.
+            amount (int): The amount to be transferred.
+            threshold (int): The required number of signatures to authorize the transaction.
+        """
         self.sender = multisig_account
         self.receiver = receiver
         self.participants = multisig_participants
@@ -170,7 +233,21 @@ class MultiSigTransaction:
         self.version = 1
 
     def pay(self, note: str):
+        """
+        Executes a multisignature payment transaction on the Algorand blockchain.
 
+        This method checks if the sender has sufficient funds to cover the transaction amount
+        and funds the account if necessary. It then creates, signs, and sends a payment transaction
+        from the sender to the receiver. The transaction is confirmed on-chain, and relevant
+        transaction details are printed.
+
+        Parameters:
+            note (str): A note to include with the transaction, encoded in UTF-8.
+
+        Raises:
+            InsufficientFundsError: If the sender does not have sufficient funds to cover the transaction amount.
+            Exception: If an error occurs during the transaction process.
+        """
         try:
             if self.sender.check_balance() < self.amount:
                 raise InsufficientFundsError(
@@ -224,8 +301,7 @@ def load_account(address: str, private_key: str, mnemonic_phrase: str) -> Accoun
     Parameters:
         address (str): The address of the account.
         private_key (str): The private key associated with the account.
-        pass_phrase (str): The passphrase generated from the private key.
-        to_file (bool): Flag indicating whether to save the account to a txt file.
+        mnemonic_phrase (str): The mnemonic phrase for the account.
 
     Returns:
         Account: An instance of the Account class representing the loaded account.
@@ -269,6 +345,24 @@ def produce_multisig_stokvel_account(
     accounts: List[Account],
     version: int = 1,
 ):
+    """
+    Produce a multisig account with the specified threshold and list of accounts.
+
+    Parameters:
+        threshold (int): The minimum number of signatures required to authorize a transaction.
+        accounts (List[Account]): A list of Account instances representing the participants in the multisig account.
+        version (int): The version of the multisig account, defaults to 1.
+
+    Returns:
+        Account: The multisig account.
+
+    Raises:
+        UnknownMsigVersionError: If the version of the multisig account is unknown.
+        InvalidThresholdError: If the threshold is invalid.
+        MultisigAccountSizeError: If the size of the multisig account is invalid.
+        ConfirmationTimeoutError: If the confirmation request times out.
+        Exception: If any other error occurs.
+    """
     try:
         multi_sig_address = [account.address for account in accounts]
         multi_sig_account = transaction.Multisig(
@@ -295,6 +389,11 @@ def produce_multisig_stokvel_account(
 def test_transactions():
 
     # accounts = generate_account()
+    """
+    Test transactions between accounts.
+
+    This function tests transactions between accounts, first by generating a list of accounts, then by creating a multisig account and making payments to it from each account, and finally by making a multisig transaction from the multisig account to one of the accounts.
+    """
     accounts = [
         {
             "address": "XIYVUEEH6BAUJPZDRMWIEINY32N7XWVSBABTD2NZALUKW6UR3BEBRZ4LPA",
@@ -350,6 +449,18 @@ def test_transactions():
 def run_payment_simulation(
     time_t: int, accounts: List[Account], multisig_account: Account, amount: int
 ) -> None:
+    """
+    Run a simulation of a stokvel payment system.
+
+    Parameters:
+    time_t (int): The day of the month when the contributions are made.
+    accounts (List[Account]): A list of Account objects that are part of the stokvel.
+    multisig_account (Account): The Account object that manages the stokvel.
+    amount (int): The amount of ALGO that each participant contributes to the stokvel.
+
+    Returns:
+    None
+    """
     successful_payments = set()
     i = 1
     sum_ammount = 0
@@ -410,6 +521,16 @@ def run_payment_simulation(
 
 
 def main():
+    """
+    Run a Stokvel payment simulation.
+
+    This function creates a list of 5 Account objects from hardcoded addresses, mnemonic phrases, and private keys.
+    It then creates a multisig account from these 5 accounts with a threshold of 80% (4 out of 5 accounts).
+    The function runs a simulation of a Stokvel payment system, where each account contributes 0.5 ALGO to the
+    multisig account on a specified day of the month (default is 10), and a random account receives a payout of
+    60% of the total contributions on the next day.
+    The simulation continues until all 5 accounts have successfully received a payout.
+    """
     parser = argparse.ArgumentParser(description="Run a Stokvel payment simulation.")
     parser.add_argument(
         "-t",
