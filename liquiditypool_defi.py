@@ -4,7 +4,7 @@ import webbrowser
 from typing import Any, Dict, List, Optional
 
 from algosdk import account, mnemonic, transaction
-from algosdk.transaction import AssetTransferTxn, SignedTransaction
+from algosdk.transaction import AssetTransferTxn, PaymentTxn, SignedTransaction
 from algosdk.v2client import algod
 
 
@@ -65,17 +65,64 @@ class Account:
             )
 
 
+class LiquidityPool:
+
+    def __init__(self, pool_account: Account):
+        self.pool_ALGO = 0
+        self.pool_UCTZAR = 0
+        self.total_lp_tokens = 0
+        self.lp_tokens = {}
+        self.pool_account = pool_account
+
+    def add_liquidity(
+        self, provider: Account, amount_algo: float, amount_uctzar: float, asset_id: int
+    ):
+        converted_ammount = int(amount_algo / Account.algo_conversion)
+        txn_1 = PaymentTxn(
+            sender=provider.address,
+            receiver=self.pool_account.address,
+            amt=converted_ammount,  # Convert ALGO to microAlgos
+            sp=self.pool_account.algod_client.suggested_params(),
+        )
+
+        txn_2 = AssetTransferTxn(
+            sender=provider.address,
+            receiver=self.pool_account.address,
+            amt=int(
+                amount_uctzar * 1e2
+            ),  # Convert UCTZAR to smallest unit (2 decimals)
+            index=asset_id,
+            sp=self.pool_account.algod_client.suggested_params(),
+        )
+
+        liquidity_txns = [txn_1, txn_2]
+        signed_txns = process_atomic_transactions(
+            transactions=liquidity_txns, account=provider
+        )
+
+        txid = self.pool_account.algod_client.send_transactions(signed_txns)
+        _ = transaction.wait_for_confirmation(self.pool_account.algod_client, txid)
+
+        # Update pool balances and LP tokens
+        self.pool_ALGO += amount_algo
+        self.pool_UCTZAR += amount_uctzar
+        lp_token_amount = amount_algo + amount_uctzar
+        self.total_lp_tokens += lp_token_amount
+        self.lp_tokens[provider.address] = (
+            self.lp_tokens.get(provider.address, 0) + lp_token_amount
+        )
+        print(f"LP Tokens for {provider.address}: {self.lp_tokens[provider.address]}")
+
+
 # Utility Functions
 ###############################################################################################################################
 def process_atomic_transactions(
-    self, transactions: List[AssetTransferTxn], accounts: List[Account]
+    transactions: List[AssetTransferTxn], account: Account
 ) -> List[SignedTransaction]:
     signed_txns = []
     gid = transaction.calculate_group_id(transactions)
     for txn in transactions:
         txn.group = gid
-
-    for txn, account in zip(transactions, accounts):
         signed_txn = txn.sign(account.private_key)
         signed_txns.append(signed_txn)
 
