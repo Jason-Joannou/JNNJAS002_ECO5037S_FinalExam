@@ -67,15 +67,16 @@ class Account:
 
 class LiquidityPool:
 
-    def __init__(self, pool_account: Account):
+    def __init__(self, pool_account: Account, asset_id: int):
         self.pool_ALGO = 0
         self.pool_UCTZAR = 0
         self.total_lp_tokens = 0
         self.lp_tokens = {}
         self.pool_account = pool_account
+        self.asset_id = asset_id
 
     def add_liquidity(
-        self, provider: Account, amount_algo: float, amount_uctzar: float, asset_id: int
+        self, provider: Account, amount_algo: float, amount_uctzar: float
     ):
         converted_ammount = int(amount_algo / Account.algo_conversion)
         txn_1 = PaymentTxn(
@@ -91,7 +92,7 @@ class LiquidityPool:
             amt=int(
                 amount_uctzar * 1e2
             ),  # Convert UCTZAR to smallest unit (2 decimals)
-            index=asset_id,
+            index=self.asset_id,
             sp=self.pool_account.algod_client.suggested_params(),
         )
 
@@ -112,6 +113,51 @@ class LiquidityPool:
             self.lp_tokens.get(provider.address, 0) + lp_token_amount
         )
         print(f"LP Tokens for {provider.address}: {self.lp_tokens[provider.address]}")
+
+    def trade_algo_uctzar(self, trader: Account, amount_algo: float):
+
+        # Trade fee calculation
+        trade_fee = amount_algo * 0.003  # 0.3% fee
+        net_amount_algo = amount_algo - trade_fee
+        amount_uctzar = net_amount_algo * 2
+
+        net_converted_amount = int(net_amount_algo / Account.algo_conversion)
+
+        txn_1 = PaymentTxn(
+            sender=trader.address,
+            receiver=self.pool_account.address,
+            amt=net_converted_amount,  # Convert ALGO to microAlgos
+            sp=self.pool_account.algod_client.suggested_params(),
+        )
+
+        txn_2 = AssetTransferTxn(
+            sender=self.pool_account.address,
+            receiver=trader.address,
+            amt=int(
+                amount_uctzar * 1e2
+            ),  # Convert UCTZAR to its smallest unit (2 decimals)
+            index=self.asset_id,
+            sp=self.pool_account.algod_client.suggested_params(),
+        )
+
+        signed_txns = process_atomic_transactions(
+            transactions=[txn_1, txn_2], account=trader
+        )
+
+        txid = self.pool_account.algod_client.send_transactions(signed_txns)
+        _ = transaction.wait_for_confirmation(self.pool_account.algod_client, txid)
+
+        # Update pool balances and LP tokens
+        self.pool_ALGO += net_amount_algo
+        self.pool_UCTZAR -= amount_uctzar
+        lp_token_amount = net_amount_algo + amount_uctzar
+        self.total_lp_tokens += lp_token_amount
+        self.lp_tokens[trader.address] = (
+            self.lp_tokens.get(trader.address, 0) + lp_token_amount
+        )
+        print(f"LP Tokens for {trader.address}: {self.lp_tokens[trader.address]}")
+        print(f"{trader.address} traded {amount_algo} ALGO for {amount_uctzar} UCTZAR.")
+        print(f"Trade fee of {trade_fee} ALGO added to the pool.")
 
 
 # Utility Functions
