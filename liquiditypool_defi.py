@@ -65,6 +65,8 @@ class Account:
             )
 
 
+# Utility Functions
+###############################################################################################################################
 def process_atomic_transactions(
     self, transactions: List[AssetTransferTxn], accounts: List[Account]
 ) -> List[SignedTransaction]:
@@ -80,28 +82,24 @@ def process_atomic_transactions(
     return signed_txns
 
 
-def setup():
-    pass
-
-
 # Create UCTZAR Asset
-def create_uctzar_asset(manager_address, private_key):
+def create_uctzar_asset(manager_address: Account):
     # Parameters for ASA creation - fixed for this example
-    params = algod_client.suggested_params()
+    params = manager_address.algod_client.suggested_params()
     txn = transaction.AssetConfigTxn(
-        sender=manager_address,
+        sender=manager_address.address,
         sp=params,
         total=1_000_000,  # Total supply of UCTZAR
         default_frozen=False,
         unit_name="UCTZAR",
         asset_name="South African Rand Stablecoin",
-        manager=manager_address,
-        reserve=manager_address,
-        freeze=manager_address,
-        clawback=manager_address,
+        manager=manager_address.address,
+        reserve=manager_address.address,
+        freeze=manager_address.address,
+        clawback=manager_address.address,
         decimals=2,
     )
-    signed_txn = txn.sign(private_key)
-    txid = algod_client.send_transaction(signed_txn)
+    signed_txn = txn.sign(manager_address.private_key)
+    txid = manager_address.algod_client.send_transaction(signed_txn)
     print("Creating UCTZAR asset, TXID:", txid)
     return txid
